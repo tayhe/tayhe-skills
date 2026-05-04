@@ -7,6 +7,7 @@
 | Skill | 说明 |
 |-------|------|
 | [phonetik](./phonetik/) | 语音总入口：ASR（qwen-voice）+ TTS（minimax-multimodal）|
+| [github-repo-finder](./github-repo-finder/) | GitHub 仓库搜索：根据功能需求找开源项目 |
 
 ## 添加新 Skill
 

@@ -2,7 +2,7 @@
 #
 # Phonetik TTS — 文字转语音并发送
 # 依赖：
-#   - minimax-multimodal (TTS 生成)
+#   - mmx-cli (TTS 生成)
 #   - ffmpeg (格式转换)
 #   - openclaw CLI (消息发送)
 #
@@ -10,10 +10,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MINIMAX_TTS="${HOME}/.openclaw/skills/minimax-multimodal/scripts/tts/generate_voice.sh"
-# 获取当前 agent workspace（来自 PWD 环境变量）
 WORKSPACE="${PWD:-${HOME}/.openclaw}"
 OUTPUT_DIR="${WORKSPACE}/phonetik-output"
+
+# 确保 mmx 和 ffmpeg 在 PATH
+export PATH="$HOME/.local/bin:$PATH"
 
 usage() {
   echo "Usage: $0 <send|generate> [options]"
@@ -28,13 +29,13 @@ usage() {
   echo "  --target TARGET    发送目标，飞书为 open_id（send 模式必需）"
   echo "  --voice VOICE     声音 ID（默认 female-tianmei-jingpin）"
   echo ""
-  echo "MiniMax 专属选项（不影响其他 TTS 实现）："
+  echo "MiniMax 专属选项（mmx speech synthesize）："
   echo "  --speed RATE      语速，范围 0.5~2.0（默认 1.0）"
   echo "  --volume LEVEL    音量，范围 0~10（默认 1.0）"
   echo "  --pitch NUMBER    语调，范围 -12~12（默认 0）"
   echo "  --emotion NAME    情绪：happy / sad / angry / fearful /"
   echo "                     disgusted / surprised / calm / fluent / whisper"
-  echo "  --sample-rate HZ  采样率：8000/16000/22050/24000/32000/44100（默认 32000）"
+  echo "  --sample-rate HZ  采样率（默认 32000）"
   echo ""
   echo "Generate 模式额外选项："
   echo "  -o, --output PATH 输出文件路径（必需）"
@@ -69,17 +70,17 @@ shift
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --text)       TEXT="$2";       shift 2 ;;
-    --channel)    CHANNEL="$2";    shift 2 ;;
-    --target)     TARGET="$2";     shift 2 ;;
-    --voice)      VOICE="$2";      shift 2 ;;
-    --speed)      SPEED="$2";      shift 2 ;;
-    --volume)     VOLUME="$2";     shift 2 ;;
-    --pitch)      PITCH="$2";      shift 2 ;;
-    --emotion)    EMOTION="$2";    shift 2 ;;
-    --sample-rate) SAMPLE_RATE="$2"; shift 2 ;;
-    -o|--output)  OUTPUT_PATH="$2"; shift 2 ;;
-    *)            echo "未知参数: $1" >&2; usage ;;
+    --text)          TEXT="$2";       shift 2 ;;
+    --channel)       CHANNEL="$2";   shift 2 ;;
+    --target)        TARGET="$2";    shift 2 ;;
+    --voice)         VOICE="$2";     shift 2 ;;
+    --speed)         SPEED="$2";     shift 2 ;;
+    --volume)        VOLUME="$2";    shift 2 ;;
+    --pitch)         PITCH="$2";     shift 2 ;;
+    --emotion)       EMOTION="$2";  shift 2 ;;
+    --sample-rate)   SAMPLE_RATE="$2"; shift 2 ;;
+    -o|--output)     OUTPUT_PATH="$2"; shift 2 ;;
+    *)               echo "未知参数: $1" >&2; usage ;;
   esac
 done
 
@@ -115,17 +116,50 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# 构建 minimax TTS 参数
-TTS_ARGS=("-v" "$VOICE" "-o" "$TMP_MP3")
-[[ "$SPEED"    != "1.0"  ]] && TTS_ARGS+=("--speed"     "$SPEED")
-[[ "$VOLUME"   != "1.0"  ]] && TTS_ARGS+=("--volume"    "$VOLUME")
-[[ "$PITCH"    != "0"     ]] && TTS_ARGS+=("--pitch"     "$PITCH")
-[[ -n "$EMOTION"          ]] && TTS_ARGS+=("--emotion"   "$EMOTION")
-[[ "$SAMPLE_RATE" != "32000" ]] && TTS_ARGS+=("--sample-rate" "$SAMPLE_RATE")
+# === 构建 mmx speech synthesize 参数 ===
+# mmx voice IDs: 使用 mmx speech synthesize --help 可查看可用 voice
+# 默认 voice: English_expressive_narrator
+# 语速 mmx 用 --speed 参数
+
+MMX_ARGS=()
+
+# voice mapping: phonetik voice ID -> mmx voice ID
+# Note: female-tianmei-jingpin and similar are available in speech-2.8-hd
+case "$VOICE" in
+  female-tianmei-jingpin) MMX_VOICE="female-tianmei-jingpin" ;;
+  female-tianmei)        MMX_VOICE="female-tianmei" ;;
+  male-yunyang)          MMX_VOICE="male-qn-qingse" ;;
+  male-jiajia)           MMX_VOICE="male-qn-qingse" ;;
+  *)                      MMX_VOICE="$VOICE" ;;
+esac
+
+# 只有非空时才加 voice 参数（mmx 默认 voice 即 English_expressive_narrator）
+[[ -n "$MMX_VOICE" ]] && MMX_ARGS+=(--voice "$MMX_VOICE")
+MMX_ARGS+=(--speed "$SPEED")
+
+[[ "$VOLUME" != "1.0" ]] && MMX_ARGS+=(--volume "$VOLUME")
+[[ "$PITCH" != "0" ]]    && MMX_ARGS+=(--pitch "$PITCH")
+[[ -n "$EMOTION" ]]      && MMX_ARGS+=(--emotion "$EMOTION")
+
+# 采样率转 mmx 格式
+case "$SAMPLE_RATE" in
+  8000)   MMX_RATE="8000" ;;
+  16000)  MMX_RATE="16000" ;;
+  22050)  MMX_RATE="22050" ;;
+  24000)  MMX_RATE="24000" ;;
+  32000)  MMX_RATE="32000" ;;
+  44100)  MMX_RATE="44100" ;;
+  *)      MMX_RATE="32000" ;;
+esac
+MMX_ARGS+=(--sample-rate "$MMX_RATE")
+
+# 输出 mp3
+MMX_ARGS+=(--format mp3)
+MMX_ARGS+=(--out "$TMP_MP3")
 
 # 生成 TTS
 echo "生成语音: $TEXT" >&2
-bash "$MINIMAX_TTS" tts "$TEXT" "${TTS_ARGS[@]}" >/dev/null 2>&1
+mmx speech synthesize --text "$TEXT" "${MMX_ARGS[@]}" 2>&1
 
 if [[ ! -f "$TMP_MP3" ]]; then
   echo "错误：TTS 生成失败" >&2
