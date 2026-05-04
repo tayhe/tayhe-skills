@@ -1,11 +1,16 @@
 ---
 name: github-repo-finder
-description: Search for reusable GitHub repositories based on functional requirements. Use when user needs to find open-source libraries, tools, or projects on GitHub that solve a specific problem.
+description: >
+  专业的开源仓库搜索助手，帮助开发者快速找到可复用的 GitHub 仓库。
+  触发条件：(1) 用户描述需要某种功能或工具，想找开源实现
+  (2) 用户明确要求搜索 GitHub 仓库
+  (3) 用户说"找一个库"、"有没有现成的"、"推荐一个开源项目"等类似意图
+  支持任意语言、任意领域的仓库搜索，输出结构化评分卡片。
 ---
 
 # GitHub Repo Finder
 
-Find the best GitHub repositories for a given functional requirement using a structured 6-step workflow.
+6 步工作流：关键词生成 → 搜索 → 去重评估 → 评分 → 输出 → 建议。
 
 ## Workflow
 
@@ -28,106 +33,69 @@ Find the best GitHub repositories for a given functional requirement using a str
 - **核心通用词绝不带限定条件**，确保能捕获到描述中未写但实际符合的仓库
 - 特色需求词必须同时包含：核心功能术语 + 特殊约束
 
-**示例：** See [examples.md](references/examples.md)
+**示例：** 详见 [references/examples.md](references/examples.md) 中的 4 个完整示例。
 
 ### Step 2: 执行搜索
 
-对每组关键词执行以下命令：
+对每组关键词执行：
 
-```
+```bash
 gh search repos "{关键词}" --sort=stars --limit=5 --json name,fullName,url,description,stargazersCount,updatedAt,language,license
 ```
 
-如果用户指定了语言，加上 `--language` 参数。
+用户指定语言时加 `--language` 参数。
+
+也可使用辅助脚本 `scripts/search_repos.py` 批量搜索，支持多关键词一次性执行并自动去重排序：
+
+```bash
+python3 scripts/search_repos.py "keyword1" "keyword2" "keyword3"
+python3 scripts/search_repos.py --language python "keyword1" "keyword2"
+```
 
 ### Step 3: 去重 + 深度评估
 
-对6组关键词的搜索结果合并去重，**按 star 数量降序排列**。
+6 组结果合并去重，按 star 降序排列。
 
-**评估范围与终止条件：**
-
-```
-评估顺序（按优先级）：
+**评估顺序（按优先级）：**
 1. 所有 star ≥ 500 的仓库（高价值，必评估）
 2. star 100-499 的前 15 个（潜力项目）
 3. star < 100 的前 10 个（最后备选）
 
-终止条件（满足其一即停止）：
+**终止条件（满足其一即停止）：**
 - 已找到 5 个明确符合需求的仓库
 - 已评估 25 个仓库仍未找到符合需求的
 - 已遍历所有去重后的仓库
-```
 
-**核心原则：
-永远不要只看 description 判断匹配度**：
-- ❌ 错误："description 没写XX功能，所以跳过"
-- ✅ 正确："虽然 description 没提，但 star 很高，必须读 README 验证是否真的不符合"
+**核心原则：永远不只看 description 判断匹配度。** star 高但 description 模糊的仓库，必须读 README 验证。
 
-**对每个候选仓库执行：**
+对每个候选仓库：
 
-1. 基础信息：
-
-```
+```bash
+# 基础信息
 gh api repos/{owner}/{repo} --jq '{stars: .stargazers_count, forks: .forks_count, open_issues: .open_issues_count, updated: .updated_at, created: .created_at, license: .license.spdx_id, archived: .archived, description: .description, topics: .topics, clone_url: .clone_url, homepage: .homepage}'
-```
 
-2. **必读 README** 验证需求匹配：
-
-```
+# README（超长取前 200 行）
 gh api repos/{owner}/{repo}/readme --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
-```
 
-如果 README 内容过长，只取前 200 行进行分析。
-
-3. 最近提交活跃度：
-
-```
+# 最近 5 次提交
 gh api repos/{owner}/{repo}/commits --jq '.[0:5] | .[] | {date: .commit.author.date, message: .commit.message}' 2>/dev/null
 ```
 
-**评估流程：**
-- 按 star 从高到低读取 README
-- 记录匹配状态：✅ 符合 / ❌ 不符合 / ❓ 不确定
-- 当找到 5 个符合需求的仓库后，立即停止评估
-- 若评估 25 个后仍未找到足够符合条件的，停止并报告
+记录匹配状态：✅ 符合 / ❌ 不符合 / ❓ 不确定。
 
-### Step 4: 评分
+## Step 4: 评分（满分 25）
 
-对符合需求的候选仓库，按以下维度打分（每项1-5分）：
+| 维度 | 5分 | 3分 | 1分 |
+|------|-----|-----|-----|
+| Star | >5k | >1k | >100 |
+| 活跃度 | 1月内更新 | 6月内 | 超1年 |
+| License | MIT/Apache/BSD | LGPL | 无license |
+| 需求匹配 | README 明确满足核心需求 | 需查代码确认 | 明确不符 |
+| 社区健康 | forks 多、issues 活跃、未 archived | 一般 | 差 |
 
-1. **Star 数量**：
-   - 大于5k = 5分
-   - 大于2k = 4分
-   - 大于1k = 3分
-   - 大于500 = 2分
-   - 大于100 = 1分
+## Step 5: 输出结果
 
-2. **活跃度**：
-   - 1个月内更新 = 5分
-   - 3个月内更新 = 4分
-   - 6个月内更新 = 3分
-   - 1年内更新 = 2分
-   - 超1年更新 = 1分
-
-3. **License 友好度**：
-   - MIT/Apache/BSD = 5分
-   - LGPL = 3分
-   - GPL = 2分
-   - 无license = 1分
-
-4. **与需求匹配度**（基于 README 内容判断）：
-   - 5分：README 明确说明满足核心需求，功能完整
-   - 4分：README 说明满足核心需求，功能有局限
-   - 3分：需要查看代码才能确认是否满足
-   - 2分：README 模糊，不确定是否满足
-   - 1分：明确不符合需求
-
-5. **社区健康度**：
-   - 综合 forks、open issues 数量、是否 archived 判断 1-5分
-
-### Step 5: 输出结果
-
-按总分排序，对每个推荐仓库输出以下信息卡片：
+按总分排序，每个推荐仓库输出：
 
 ```
 排名x：仓库名
@@ -135,42 +103,32 @@ gh api repos/{owner}/{repo}/commits --jq '.[0:5] | .[] | {date: .commit.author.d
 仓库: owner/repo
 链接: https://github.com/owner/repo
 Clone: git clone https://github.com/owner/repo.git
-Star: 数量
-语言: Python / TypeScript / ...
-License: MIT / Apache 2.0 / ...
-最后更新: 日期（x天前）
+Star / 语言 / License / 最后更新
 总分: xx / 25
 
-README 摘要：
-用 2-3 句话概括这个项目是做什么的、核心功能是什么、怎么用。
+README 摘要：2-3 句话概括功能与用法（中文）
 
 仓库特色：
-- 特色1：这个仓库与众不同的地方
-- 特色2：技术亮点或独特的设计
-- 特色3：生态/插件/集成优势
+- 特色1
+- 特色2
+- 特色3
 
-注意事项：
-如果有需要注意的点（依赖多、学习曲线陡、文档差等），在这里说明。
+注意事项：依赖、学习曲线、文档质量等
 ```
 
-对每个推荐仓库重复以上卡片格式。
+## Step 6: 总结建议
 
-### Step 6: 总结建议
-
-在所有仓库卡片之后，给出：
-
-1. **最终推荐**：最推荐哪个仓库，为什么
-2. **组合方案**：如果需要多个库搭配使用，给出搭配建议
-3. **快速开始**：推荐仓库的一键 clone 加安装命令
-4. **避坑提醒**：某些仓库看着不错但有坑的，提醒一下
+1. **最终推荐**：最推荐哪个，为什么
+2. **组合方案**：多库搭配建议
+3. **快速开始**：一键 clone + 安装命令
+4. **避坑提醒**：看着好但有坑的仓库
 
 ## 注意事项
 
-- 关键词一定要用英文搜索
-- 如果某个命令执行失败，跳过继续
-- 优先推荐最近 6 个月有更新的仓库
-- 如果用户没指定语言，默认不限制语言
-- 如果结果太少，尝试更宽泛的关键词再搜一轮
-- README 摘要要用中文输出，简洁明了
-- Clone URL 确保是可直接使用的完整命令
-- 仓库特色要结合 README 内容分析，不要泛泛而谈
+- 关键词必须用英文
+- 命令执行失败则跳过继续
+- 优先推荐 6 个月内有更新的仓库
+- 用户未指定语言则不限制
+- 结果太少时用更宽泛的关键词再搜一轮
+- README 摘要用中文，简洁明了
+- Clone URL 确保可直接使用
