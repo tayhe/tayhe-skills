@@ -19,8 +19,18 @@ Usage:
 import argparse
 import os
 import sys
+from pathlib import Path
 
 import httpx
+
+# Auto-load .env from skill root
+_env_file = Path(__file__).resolve().parent.parent / ".env"
+if _env_file.is_file():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
 
 # ---------------------------------------------------------------------------
 # Env helpers (mirrors lib_sync / lib_async)

@@ -35,6 +35,15 @@ if sys.platform == "win32":
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Auto-load .env from skill root (sibling of scripts/)
+_env_file = Path(__file__).resolve().parent.parent / ".env"
+if _env_file.is_file():
+    for _line in _env_file.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip())
+
 import lib_async
 import lib_sync
 from lib_async import (
