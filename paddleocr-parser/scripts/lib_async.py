@@ -133,7 +133,7 @@ def submit_job(
         }
         data = {
             "model": model,
-            "optionalPayload": optional_payload,
+            "optionalPayload": json.dumps(optional_payload),
         }
         resp = httpx.post(api_url, headers=headers, data=data, files=files, timeout=120)
         files["file"].close()
@@ -218,8 +218,8 @@ def poll_job(
 
 
 def download_jsonl(jsonl_url: str, token: str = "") -> list[dict]:
-    headers = {"Authorization": f"bearer {token}"}
-    resp = httpx.get(jsonl_url, headers=headers, timeout=300)
+    # BOS pre-signed URLs don't need auth; sending it causes 400.
+    resp = httpx.get(jsonl_url, timeout=300)
 
     if resp.status_code != 200:
         raise APIError(f"[{resp.status_code}] {resp.text[:300]}")
