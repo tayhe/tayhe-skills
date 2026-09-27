@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "python-pptx>=1.0",
+#   "Pillow>=10",
+# ]
+# ///
 """
 「剧场与纸」讲义 PPT 模板（lecture-ppt-builder skill 资产）
 ============================================================
@@ -8,12 +15,19 @@
   3. 新增图片必须在 FOCUS 表登记焦点 (fx, fy)，并用渲染预览验证面部；
   4. 在文件末尾「幻灯片内容」区按手稿标题层级逐页编写。
 
+运行：`uv run build_<讲名>.py`（带 PEP 723 声明，uv 自动安装依赖；
+无 uv 时用任何已装 python-pptx 与 Pillow 的 Python 3.10+ 环境亦可）。
+
 铁律（详见 skill 的 references/design-system.md）：
   · 一页一个论点；引文必带行号出处；
   · 页眉 kicker 一律带手稿编号（1.1 / 2.3 / 3.4·a / 3.4 小结…），
     页面顺序与手稿标题层级逐节对应，手稿的 a–d 枚举与「小结」必须显式保留；
   · 正文不得低于 15pt，引文不得低于 20pt（教室投影硬指标）；
-  · 只用 assets/hd_images/ 的考据图，禁止用 assets/bg_images/ 低清碎片。
+  · 只用考据过的高清图（古典油画/立像/陶瓶/遗址，文件名带出处），禁止无出处低清网图。
+
+迁移说明：本模板自包含，唯一与具体项目绑定的部分是「本讲配置」区——
+素材分组常量（PHIL/CIV/...）按新项目的图片目录结构调整，
+IMG/FOCUS 按本讲实际用图登记；其余版式代码（色彩/字体/工具函数/页型）一律不动。
 """
 from pathlib import Path
 import tempfile
@@ -96,7 +110,8 @@ prs.slide_height = Inches(H)
 
 # ================================================================ 基础工具
 def _cjk(run, name):
-    run.font.name = name
+    latin = F_SANS if name == F_SANS else F_LATIN
+    run.font.name = latin
     rPr = run._r.get_or_add_rPr()
     succ = {
         "a:ea": ("a:cs", "a:sym", "a:hlinkClick", "a:hlinkMouseOver", "a:rtl", "a:extLst"),
@@ -363,7 +378,8 @@ def s_quote(kicker, quote_paras, source, img, note=""):
         [dict(text=kicker, font=F_SANS, size=13, color=GOLD, bold=True, spc=350)])
     hline(s, 0.98, 1.2, 0.85, GOLD, 2.0)
     n = len(quote_paras)
-    if n <= 6:
+    total_chars = sum(len(q) for q in quote_paras)
+    if n <= 5 and total_chars < 140:
         qsize, qsp, qafter, qy = 23, 1.5, 8, 1.7
     else:
         qsize, qsp, qafter, qy = 20, 1.45, 4, 1.5
