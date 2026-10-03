@@ -14,7 +14,8 @@
 | **文档与多模态** | [paddleocr-parser](./paddleocr-parser/) | 基于 PaddleOCR API 的高精度文档解析（同步/异步任务、表格提取、LaTeX 公式与排版还原） |
 | | [phonetik](./phonetik/) | 统一语音总入口：ASR 语音转文字（qwen-voice）+ TTS 语音合成（minimax-multimodal） |
 | **开发与探索** | [github-repo-finder](./github-repo-finder/) | 开源仓库检索助手（6步关键词分层拆解、去重评估与结构化评分卡片） |
-| **浏览器与调试** | [browser-cdp](./browser-cdp/) | 原生 Python websockets 直连 Chrome CDP 协议自动化（轻量免依赖，截图/JS执行/控制台监听） |
+| **浏览器与调试** | [remote-chrome](./remote-chrome/) | 远程控制 Windows 端 Chrome 浏览器（Tailscale 直连 + Playwright/CLI/CDP，登录态复用） |
+| | [browser-cdp](./browser-cdp/) | 原生 Python websockets 直连 Chrome CDP 协议自动化（轻量免依赖，截图/JS执行/控制台监听） |
 | | [browser-cdp-openclaw](./browser-cdp-openclaw/) | OpenClaw 浏览器 CDP 自动化实践指南（Snapshot-Act 循环、Ref 管理、错误恢复） |
 | | [chrome-devtools-mcp](./chrome-devtools-mcp/) | Chrome DevTools MCP 服务协议集成指南（全功能调试、网络追踪、性能分析） |
 
