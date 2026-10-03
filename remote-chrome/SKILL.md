@@ -142,3 +142,13 @@ curl -s "http://100.100.1.118:9222/json/close/<PAGE_ID>"
    Playwright 连接远端 CDP 实例时，`browser.close()` 只断开当前的 WebSocket 连接，**不会退出 Windows 端正在运行的 Chrome 浏览器**。
 4. **媒体文件存放位置**：
    若生成或保存网页截图等媒体文件，请遵从多媒体存放规则，保存到 `~/Documents/multimedia/` 目录下。
+
+---
+
+## 进阶参考与备选生态（References）
+
+按需查阅 `references/` 目录下的专题文档：
+- [raw-cdp-websockets.md](references/raw-cdp-websockets.md)：零重量级依赖时的原生 Python `websockets` 直连模板与 CDP 核心方法速查。
+- [openclaw-patterns.md](references/openclaw-patterns.md)：使用 OpenClaw CLI（Snapshot → Act、ARIA refs、自动化循环）配合本远端 Chrome 时的配置与技巧。
+- [devtools-mcp.md](references/devtools-mcp.md)：将本远端 Chrome 包装为标准 MCP Server（`chrome-devtools-mcp`），提供性能诊断与网络追踪工具。
+
